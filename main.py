@@ -30,7 +30,7 @@ def keys_to_output(keys):
         
     return output
 
-file_name='main_loop1.npy'
+file_name='to_delete_test1.npy'
 
 if os.path.isfile(file_name):
     print('File exists, loading precious data!')
