@@ -36,7 +36,7 @@ HEIGHT = 120
 LR = 1e-3
 EPOCHS = 30
 #MODEL_NAME = 'pygta5-car-{}-{}-{}-epochs.model'.format(LR,'alexnetv2',EPOCHS)
-MODEL_NAME = "main_loop_model_extended_3"
+MODEL_NAME = "main_loop_model_extended_1"
 #train_data = np.load('training_data.v2.npy')
 #with tf.device('/device:GPU:0'):
  # tf.reset_default_graph()
@@ -55,7 +55,7 @@ for i in range(int((len(final_data)/data_per_iteration))):
     else:
         current_data=final_data[-(len(final_data)%data_per_iteration)]
     
-    train = current_data[:-500]
+    train = current_data[:-1000]
     test = current_data[-1000:]
     X = np.array([i[0] for i in train]).reshape(-1,WIDTH,HEIGHT,1).astype(float)
     Y=([i[1] for i in train])

@@ -21,7 +21,7 @@ LR = 1e-3
 EPOCHS = 8
 #MODEL_NAME = "models\current_model\model0.model" #'pygta5-car-{}-{}-{}-epochs.model'.format(LR,'alexnetv2',EPOCHS)
 #MODEL_NAME = "main_loop_model.model"#"models\main_loop_model"
-MODEL_NAME="models\main_loop_extended\main_loop_model_extended"
+MODEL_NAME="main_loop_model_extended_1"
     
 def straight():
     PressKey(W)
@@ -83,8 +83,8 @@ def main():
             prediction[1]*=accFactor
             brakeT=0.95
             leftT=0.1
-            rightMultFactor=0.8;
-            prediction[2]*=rightMultFactor
+            #rightMultFactor=0.8;
+            #prediction[2]*=rightMultFactor
             rightT=0.1
             if prediction[0] > prediction[2]:
                 if prediction[0] > leftT:

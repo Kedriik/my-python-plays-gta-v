@@ -81,9 +81,11 @@ for i in range(final_data_length):
     data=final_data[i]
     reversedImage=np.flip(data[0], 1)
     originalInput=data[1]
-    reversedInput=originalInput
+    reversedInput=[0,0,0,0]
     reversedInput[0]=originalInput[2]
     reversedInput[2]=originalInput[0]
+    reversedInput[1]=originalInput[1]
+    reversedInput[3]=originalInput[3]
     final_data.append([reversedImage, reversedInput])
     
 shuffle(final_data)

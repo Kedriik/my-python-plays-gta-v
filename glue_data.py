@@ -4,10 +4,7 @@ Created on Wed Jun 20 20:20:37 2018
 
 @author: Kedrowsky
 """
-#train_data = np.load('training_data_npy.npy')
-#array=[1,2,3,4]
-#array1=array[::-1]
-#img1=np.flip(img, 1)
+
 
 import time
 start_time=time.time()
