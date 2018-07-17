@@ -45,7 +45,7 @@ MODEL_NAME = "main_loop_model_extended_1"
     
  #   sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
 
-data_per_iteration=10000
+data_per_iteration=50000
 model = alexnet(WIDTH, HEIGHT, LR)
 
 for i in range(int((len(final_data)/data_per_iteration))):

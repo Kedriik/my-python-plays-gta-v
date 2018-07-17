@@ -78,9 +78,10 @@ def main():
        #     ReleaseKey(W)
             ReleaseKey(D)
        #     ReleaseKey(S)
-            accT=0.0
+            
             accFactor=5;
-            prediction[1]*=accFactor
+            #prediction[1]*=accFactor
+            accT=0.1
             brakeT=0.95
             leftT=0.1
             #rightMultFactor=0.8;
