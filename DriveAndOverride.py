@@ -3,6 +3,7 @@ import cv2
 import time
 from grabscreen import grab_screen
 from getkeys import key_check
+from directkeys import PressKey, ReleaseKey, W,A,S,D
 import os
 from random import random
 
@@ -61,6 +62,19 @@ def keys_to_output(keys):
     if 'S' in keys:
         output[3] = 1        
     return output
+def update_pressed_keys(keys):
+    ReleaseKey(W)
+    ReleaseKey(S)
+    ReleaseKey(A)
+    ReleaseKey(D)
+    if keys[0] == 1:
+        PressKey(A)
+    if keys[1] == 1:
+        PressKey(W)
+    if keys[2] == 1:
+        PressKey(D)
+    if keys[3] == 1:
+        PressKey(S)
 
 def RandomAgent(state, reward):
     categories =  [0,0,0,0,0,0,0,0,0]
@@ -77,46 +91,56 @@ def RandomAgent(state, reward):
         else:
             categories[i] = 0
             
-    print(categories)
+    #print(categories)
     keys = categoriesToKeys(categories.tolist())
-    print(keys)
+    #print(keys)
+    return keys
             
 def main():
     for i in list(range(4))[::-1]:
         print(i+1)
         time.sleep(1)
         
-    last_time = time.time()
-    start_time = time.time()
+
     collectData=False
     clickFlag=False
     print("Press Z to start collecting data")
     reward = 0
+    capture_region = (0,40,800,640)
+    reshape_size = (300,400)
+    last_state = grab_screen(region = capture_region)
+    last_state = cv2.cvtColor(last_state, cv2.COLOR_BGR2GRAY)
+    last_state = cv2.resize(last_state,(reshape_size[1],reshape_size[0]))
+    last_state = last_state.reshape(1,reshape_size[0],reshape_size[1])
+    
+    history = []
+    delta_time = 0
     while True:
-        state = grab_screen(region=(0,40,800,640))
-        state = cv2.cvtColor(state, cv2.COLOR_BGR2GRAY)
-        state = cv2.resize(state, (400,300))
-        state = state.reshape(1,300,400)
-        
-        cv2.imshow('',state[0])
-        if cv2.waitKey(25) & 0xFF==ord('q'):
-            cv2.destroyAllWindows()
-            break
-        
-        
+        time0 = time.time()
+        #make action
+        action_keys = RandomAgent(1,1)
+        #update_pressed_keys(action_keys)
+        action = keysToCategories(action_keys)
+        #-----------zzzzzzzzzzzzzzzzzz
         keys   = key_check()
-        output = keys_to_output(keys)
-        #print(output)
+        
         if 'Z' in keys and clickFlag == False:
             clickFlag = True
             if collectData == True:
                 collectData = False
-                end_time = time.time()
-                reward = end_time - start_time
                 print('On time based reward:',reward)
+                history_np = np.array(history)
+                frames = history_np[:,0]
+                for frame in frames:
+                    cv2.imshow('',frame[0])
+                    if cv2.waitKey(25) & 0xFF==ord('q'):
+                        cv2.destroyAllWindows()
+                        break
+                #update agent
             else:
                 collectData = True
-                start_time = time.time()
+                #start_time = time.time()
+                reward = 0
                 print('Training started')
         elif 'Z' not in keys and clickFlag == True:
             clickFlag = False
@@ -125,9 +149,25 @@ def main():
         if 'X' in keys:
             print ('collecting data stopped')
             break
-            
-        #print('Loop took {} seconds'.format(time.time()  - last_time))
-        last_time = time.time()
+        reward = reward + delta_time
+        
+        #acquire new environment state 
+        state = grab_screen(region = capture_region)
+        state = cv2.cvtColor(state, cv2.COLOR_BGR2GRAY)
+        state = cv2.resize(state, (reshape_size[1],reshape_size[0]))
+        state = state.reshape(1,reshape_size[0],reshape_size[1])
+        #-----------------------------
+        history.append([last_state,action,reward,state])
+        last_state = state        
+# =============================================================================
+#         cv2.imshow('',state[0])
+#         if cv2.waitKey(25) & 0xFF==ord('q'):
+#             cv2.destroyAllWindows()
+#             break
+# =============================================================================
+        #print('Loop took {} seconds'.format(time.time()  - last_time))        
+        time1 = time.time()
+        delta_time = time1 - time0
             
 if __name__ == '__main__':
     main()
