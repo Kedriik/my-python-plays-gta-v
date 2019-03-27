@@ -75,7 +75,13 @@ def update_pressed_keys(keys):
         PressKey(D)
     if keys[3] == 1:
         PressKey(S)
-
+        
+def releaseKeys():
+    ReleaseKey(W)
+    ReleaseKey(S)
+    ReleaseKey(A)
+    ReleaseKey(D)
+    
 def RandomAgent(state, reward):
     categories =  [0,0,0,0,0,0,0,0,0]
     for i in range(len(categories)):
@@ -119,7 +125,8 @@ def main():
         time0 = time.time()
         #make action
         action_keys = RandomAgent(1,1)
-        #update_pressed_keys(action_keys)
+        if collectData == True:
+            update_pressed_keys(action_keys)
         action = keysToCategories(action_keys)
         #-----------zzzzzzzzzzzzzzzzzz
         keys   = key_check()
@@ -128,6 +135,7 @@ def main():
             clickFlag = True
             if collectData == True:
                 collectData = False
+                releaseKeys()
                 print('On time based reward:',reward)
                 history_np = np.array(history)
                 frames = history_np[:,0]
@@ -136,6 +144,7 @@ def main():
                     if cv2.waitKey(25) & 0xFF==ord('q'):
                         cv2.destroyAllWindows()
                         break
+                cv2.destroyAllWindows()   
                 #update agent
             else:
                 collectData = True
