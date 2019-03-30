@@ -4,8 +4,10 @@ import time
 from grabscreen import grab_screen
 from getkeys import key_check
 from directkeys import PressKey, ReleaseKey, W,A,S,D
-import os
 from random import random
+import tensorflow as tf
+import tensorflow.contrib.slim as slim
+from playground import agentZ
 
 def keysToCategories(keys):
     if keys == [0,0,0,0]: #roll
@@ -81,7 +83,16 @@ def releaseKeys():
     ReleaseKey(S)
     ReleaseKey(A)
     ReleaseKey(D)
-    
+gamma = 0.99
+def discount_rewards(r):
+    """ take 1D float array of rewards and compute discounted reward """
+    discounted_r = np.zeros_like(r)
+    running_add = 0
+    for t in reversed(range(0, r.size)):
+        running_add = running_add * gamma + r[t]
+        discounted_r[t] = running_add
+    return discounted_r
+
 def RandomAgent(state, reward):
     categories =  [0,0,0,0,0,0,0,0,0]
     for i in range(len(categories)):
@@ -101,13 +112,31 @@ def RandomAgent(state, reward):
     keys = categoriesToKeys(categories.tolist())
     #print(keys)
     return keys
-            
+
+class agent():
+    def __init__(self, lr, s_size,a_size,h_size):
+        #These lines established the feed-forward part of the network.
+        #The agent takes a state and produces an action.
+        self.state_in= tf.placeholder(shape=[None,s_size[0],s_size[1],s_size[2]],dtype=tf.float32)
+        print("state in:",self.state_in)
+        conv1 = slim.conv2d(self.state_in,num_outputs = 64, kernel_size = [4,4])
+        print("conv1:",conv1)
+        max_pool1 = slim.max_pool2d(conv1,[2, 2])
+        print("max_pool1:",max_pool1)
+        hidden = slim.fully_connected(max_pool1,h_size,biases_initializer=None,activation_fn=tf.nn.relu)
+        print("hidden:",hidden)
+        self.output = slim.fully_connected(hidden,a_size,activation_fn=tf.nn.softmax,biases_initializer=None)
+        print("output:",self.output)
+        self.chosen_action = tf.argmax(self.output,1)
+
+
+        
+    
 def main():
     for i in list(range(4))[::-1]:
         print(i+1)
         time.sleep(1)
         
-
     collectData=False
     clickFlag=False
     print("Press Z to start collecting data")
@@ -117,66 +146,94 @@ def main():
     last_state = grab_screen(region = capture_region)
     last_state = cv2.cvtColor(last_state, cv2.COLOR_BGR2GRAY)
     last_state = cv2.resize(last_state,(reshape_size[1],reshape_size[0]))
-    last_state = last_state.reshape(1,reshape_size[0],reshape_size[1])
+    last_state = last_state.reshape(reshape_size[0],reshape_size[1],1)
+    
+    tf.reset_default_graph() #Clear the Tensorflow graph.
+    myAgent = agentZ(0.1,(300,400,1),9,11) 
+    #agent(lr=1e-2,s_size=(reshape_size[0],reshape_size[1],1),a_size=9,h_size=8) #Load the agent.
     
     history = []
     delta_time = 0
-    while True:
-        time0 = time.time()
-        #make action
-        action_keys = RandomAgent(1,1)
-        if collectData == True:
-            update_pressed_keys(action_keys)
-        action = keysToCategories(action_keys)
-        #-----------zzzzzzzzzzzzzzzzzz
-        keys   = key_check()
-        
-        if 'Z' in keys and clickFlag == False:
-            clickFlag = True
-            if collectData == True:
-                collectData = False
-                releaseKeys()
-                print('On time based reward:',reward)
-                history_np = np.array(history)
-                frames = history_np[:,0]
-                for frame in frames:
-                    cv2.imshow('',frame[0])
-                    if cv2.waitKey(25) & 0xFF==ord('q'):
-                        cv2.destroyAllWindows()
-                        break
-                cv2.destroyAllWindows()   
-                #update agent
-            else:
-                collectData = True
-                #start_time = time.time()
-                reward = 0
-                print('Training started')
-        elif 'Z' not in keys and clickFlag == True:
-            clickFlag = False
+    state = last_state
+    init = tf.global_variables_initializer()
+    
+# Launch the tensorflow graph
+    with tf.Session() as sess:
+        sess.run(init)
+        while True:
+            time0 = time.time()
+            #make action
+            #action_keys = RandomAgent(1,1)
+            action_keys = sess.run(myAgent.output,feed_dict={myAgent.state_in:[state]})
+            max_id = np.argmax(action_keys)
+            #    update_pressed_keys(action_keys)
+            action = [0,0,0,0,0,0,0,0,0]
+            action[max_id] = 1
+            agent_keys = categoriesToKeys(action)
+            if(collectData):
+                #Agent's decision
+                update_pressed_keys(agent_keys)
+            #-----------zzzzzz
+            keys   = key_check()
             
+            if 'Z' in keys and clickFlag == False:
+                clickFlag = True
+                if collectData == True:
+                    collectData = False
+                    releaseKeys()
+                    
+                    print('On time based reward:',reward)
+                    history_np = np.array(history)
+    
+                    frames = history_np[:,0]
+                    actions = history_np[:,1]
+                    i = 0
+                    for frame in frames:
+                        print(actions[i])
+                        i = i + 1
+                        cv2.imshow('',frame.reshape((reshape_size[0],reshape_size[1],1)))
+                        if cv2.waitKey(25) & 0xFF==ord('q'):
+                            cv2.destroyAllWindows()
+                            break
+                    cv2.destroyAllWindows()
+                    del frames
+                    del history_np
+                    del history
+                    history = []
+                    #update agent
+                else:
+                    collectData = True
+                    #start_time = time.time()
+                    reward = 0
+                    print('Training started')
+            elif 'Z' not in keys and clickFlag == True:
+                clickFlag = False
                 
-        if 'X' in keys:
-            print ('collecting data stopped')
-            break
-        reward = reward + delta_time
-        
-        #acquire new environment state 
-        state = grab_screen(region = capture_region)
-        state = cv2.cvtColor(state, cv2.COLOR_BGR2GRAY)
-        state = cv2.resize(state, (reshape_size[1],reshape_size[0]))
-        state = state.reshape(1,reshape_size[0],reshape_size[1])
-        #-----------------------------
-        history.append([last_state,action,reward,state])
-        last_state = state        
-# =============================================================================
-#         cv2.imshow('',state[0])
-#         if cv2.waitKey(25) & 0xFF==ord('q'):
-#             cv2.destroyAllWindows()
-#             break
-# =============================================================================
-        #print('Loop took {} seconds'.format(time.time()  - last_time))        
-        time1 = time.time()
-        delta_time = time1 - time0
+                    
+            if 'X' in keys:
+                print ('collecting data stopped')
+                break
+            
+            
+            if collectData:
+                #acquire new environment state 
+                reward = reward + delta_time
+                state = grab_screen(region = capture_region)
+                state = cv2.cvtColor(state, cv2.COLOR_BGR2GRAY)
+                state = cv2.resize(state, (reshape_size[1],reshape_size[0]))
+                state = state.reshape(reshape_size[0],reshape_size[1],1)
+                #-----------------------------
+                history.append([last_state,action,reward,state])
+                last_state = state        
+    # =============================================================================
+    #         cv2.imshow('',state[0])
+    #         if cv2.waitKey(25) & 0xFF==ord('q'):
+    #             cv2.destroyAllWindows()
+    #             break
+    # =============================================================================
+            #print('Loop took {} seconds'.format(time.time()  - last_time))        
+            time1 = time.time()
+            delta_time = time1 - time0
             
 if __name__ == '__main__':
     main()
