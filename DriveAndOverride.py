@@ -129,16 +129,9 @@ class agent():
         print("output:",self.output)
         self.chosen_action = tf.argmax(self.output,1)
 
-
-        
-    
-def main():
-    for i in list(range(4))[::-1]:
-        print(i+1)
-        time.sleep(1)
-        
-    collectData=False
-    clickFlag=False
+def main():        
+    collectData = False
+    clickFlag = False
     print("Press Z to start collecting data")
     reward = 0
     capture_region = (0,40,800,640)
@@ -149,31 +142,46 @@ def main():
     last_state = last_state.reshape(reshape_size[0],reshape_size[1],1)
     
     tf.reset_default_graph() #Clear the Tensorflow graph.
-    myAgent = agentZ(0.1,(300,400,1),9,11) 
-    #agent(lr=1e-2,s_size=(reshape_size[0],reshape_size[1],1),a_size=9,h_size=8) #Load the agent.
-    
+    myAgent = agentZ(0.1,(300,400,1),9,11)
     history = []
     delta_time = 0
     state = last_state
     init = tf.global_variables_initializer()
-    
+    reward = 0 #[0,0,0,0,0,0,0,0,0]
 # Launch the tensorflow graph
     with tf.Session() as sess:
         sess.run(init)
+        i = 0
+        gradBuffer = sess.run(tf.trainable_variables())
+        for ix,grad in enumerate(gradBuffer):
+            gradBuffer[ix] = grad * 0
+        print("Loop starts")
         while True:
             time0 = time.time()
             #make action
-            #action_keys = RandomAgent(1,1)
             action_keys = sess.run(myAgent.output,feed_dict={myAgent.state_in:[state]})
             max_id = np.argmax(action_keys)
             #    update_pressed_keys(action_keys)
             action = [0,0,0,0,0,0,0,0,0]
             action[max_id] = 1
             agent_keys = categoriesToKeys(action)
-            if(collectData):
-                #Agent's decision
-                update_pressed_keys(agent_keys)
-            #-----------zzzzzz
+# =============================================================================
+#             if(collectData):
+#                 #Agent's decision
+#                 update_pressed_keys(agent_keys)
+# =============================================================================
+            #-----------
+            if collectData:
+                policy = [1,1,1,1,1,1,1,1,1]
+                reward = reward + delta_time*np.array(policy)
+                state = grab_screen(region = capture_region)
+                state = cv2.cvtColor(state, cv2.COLOR_BGR2GRAY)
+                state = cv2.resize(state, (reshape_size[1], reshape_size[0]))
+                state = state.reshape(reshape_size[0], reshape_size[1],1)
+                #-----------------------------
+                history.append([last_state,action,reward,state]) 
+                last_state = state        
+            keys = []
             keys   = key_check()
             
             if 'Z' in keys and clickFlag == False:
@@ -181,29 +189,27 @@ def main():
                 if collectData == True:
                     collectData = False
                     releaseKeys()
-                    
                     print('On time based reward:',reward)
-                    history_np = np.array(history)
-    
-                    frames = history_np[:,0]
-                    actions = history_np[:,1]
-                    i = 0
-                    for frame in frames:
-                        print(actions[i])
-                        i = i + 1
-                        cv2.imshow('',frame.reshape((reshape_size[0],reshape_size[1],1)))
-                        if cv2.waitKey(25) & 0xFF==ord('q'):
-                            cv2.destroyAllWindows()
-                            break
-                    cv2.destroyAllWindows()
-                    del frames
-                    del history_np
+                    history = np.array(history)
+                    frames = np.array(history[:,0])
+                    rewards = np.array(discount_rewards(history[:,2]))
+                    actions = np.array(history[:,1])
+# =============================================================================
+#                     i = 0
+#                     for frame in frames:
+#                         print(actions[i])
+#                         i = i + 1
+#                         cv2.imshow('',frame.reshape((reshape_size[0],reshape_size[1],1)))
+#                         if cv2.waitKey(25) & 0xFF==ord('q'):
+#                             cv2.destroyAllWindows()
+#                             break
+#                     cv2.destroyAllWindows()
+# =============================================================================
                     del history
                     history = []
                     #update agent
                 else:
                     collectData = True
-                    #start_time = time.time()
                     reward = 0
                     print('Training started')
             elif 'Z' not in keys and clickFlag == True:
@@ -213,25 +219,7 @@ def main():
             if 'X' in keys:
                 print ('collecting data stopped')
                 break
-            
-            
-            if collectData:
-                #acquire new environment state 
-                reward = reward + delta_time
-                state = grab_screen(region = capture_region)
-                state = cv2.cvtColor(state, cv2.COLOR_BGR2GRAY)
-                state = cv2.resize(state, (reshape_size[1],reshape_size[0]))
-                state = state.reshape(reshape_size[0],reshape_size[1],1)
-                #-----------------------------
-                history.append([last_state,action,reward,state])
-                last_state = state        
-    # =============================================================================
-    #         cv2.imshow('',state[0])
-    #         if cv2.waitKey(25) & 0xFF==ord('q'):
-    #             cv2.destroyAllWindows()
-    #             break
-    # =============================================================================
-            #print('Loop took {} seconds'.format(time.time()  - last_time))        
+       
             time1 = time.time()
             delta_time = time1 - time0
             
