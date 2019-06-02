@@ -11,8 +11,9 @@ from playground import agentZ, agentY
 
 capture_region = (0,40,800,640)
 reshape_size = (300,400)
+g_debug_vars = []
 def keysToCategories(keys):
-    if keys == [0,0,0,0]: #roll
+    if keys == [0,0,0,0]: #rollzzt
         return [1,0,0,0,0,0,0,0,0]
     if keys == [1,0,0,0]: #roll-right
         return [0,1,0,0,0,0,0,0,0]
@@ -52,7 +53,7 @@ def categoriesToKeys(categories):
     if categories == [0,0,0,0,0,0,0,0,1]: #brake
         return [0,0,0,1]
 
-    #print("C to K: WARNING NON FOUND!")
+    #print("C to K: WARNING NON FOUND!")zz
         
 def keys_to_output(keys):
     #[A,W,D,S]
@@ -88,6 +89,14 @@ def releaseKeys():
     ReleaseKey(D)
 
 gamma = 0.99
+def show_frames(frames):
+    for frame in frames:
+        cv2.imshow('',frame)
+        if cv2.waitKey(25) & 0xFF==ord('q'):
+            cv2.destroyAllWindows()
+            break
+    cv2.destroyAllWindows()
+        
 def _discount_rewards(r):
     """ take 1D float array of rewards and compute discounted reward """
     discounted_r = np.zeros_like(r)
@@ -119,69 +128,76 @@ def get_state():
     state = state.reshape(reshape_size[0],reshape_size[1],1)
     return state
 
-def teach_agent(agent, history,sess):
-    history = np.array(history)
-    frames  = np.array(history[:,0])
-    rewards = np.array(discount_rewards(history[:,3],0.99))
-    accs = np.array(history[:,1])
-    steers = (history[:,2])
-    #steers = [np.array[steer] for steer in steers]
-    #=([steer for steer in steers])
-    #print(Y)
-    steers  = np.array([steer for steer in steers]).reshape(-1,3).astype(float)
-    accs    = np.array([acc for acc in accs]).reshape(-1,3).astype(float)
-    frames  = np.array([i for i in frames]).reshape(-1,300,400,1).astype(float)
-    #print(X)
-      
-    ret = sess.run(agent.steer_in, feed_dict={agent.acc_in:accs, agent.steer_in:steers, agent.state_in:frames})
+def teach_agent(agent, all_rewards, all_gradients,sess):
+    rewards = np.array(discount_and_normalize_rewards(all_rewards,0.99))
+    test = []
+    feed_dict = {}
+
+    
+    for var_index, gradient_placeholder in enumerate(agent.gradient_placeholders):
+        mean_gradients = np.mean([reward * all_gradients[game_index][step][var_index]
+                                  for game_index, rewards in enumerate(all_rewards)
+                                      for step, reward in enumerate(rewards)], axis=0)
+        
+        feed_dict[gradient_placeholder] = mean_gradients
+    ret = sess.run(agent.training_op, feed_dict=feed_dict)  
+    print(ret)
+    
 def m_multinomial(acc, steer):
     acc_i = np.random.multinomial(1,acc)
     steer_i = np.random.multinomial(1,steer)
     return acc_i, steer_i
+def m_multinomial9(action):
+    return np.random.multinomial(1,action)
 def main():        
     collectData = False
     clickFlag = False
+    do_action = False
+    teach_count = 0
+    
+    # Add ops to save and restore all the variables.zzt
+    #saver = tf.train.Saver()
+
     last_state = get_state()    
     tf.reset_default_graph() #Clear the Tensorflow graph.
-    myAgent = agentZ(0.1,(300,400,1),9,11)
+    myAgent = agentY(0.1,(300,400,1),9,11)
     history = []
     delta_time = 0
     state = last_state
     init = tf.global_variables_initializer()
     reward = 0 
-# Launch the tensorflow graph
+    key_check()
+# Launch the tensorflow graphzzzzz
     with tf.Session() as sess:
         sess.run(init)
         i = 0
         print("Loop starts")
         print("Press Z to start collecting data")
+        all_rewards         = []
+        all_gradients       = []
+        current_rewards     = []
+        current_gradients   = []
         while True:
             time0 = time.time()
-            #accelerate_or_brake
-            acc,steer = sess.run([myAgent.acc_action,myAgent.steer_action],
-                                 feed_dict={myAgent.state_in:[state]})
-            #action = [acc[0][0],brake[0][0],left[0][0],right[0][0]]
-            acc, steer = m_multinomial(acc[0],steer[0])
-            
-            acc = np.array([acc[0],acc[1],acc[2]])
-            steer = np.array([steer[0],steer[1],steer[2]])
-            #print(acc)
-            releaseKeys();
-            #if  collectData:
-            #    print(action[0],action[1])
-                
-                #Agent's decision
-                #update_pressed_keys(action)
-            #-----------xxzzxxzzzzzzxzzzxxzzzzzzxzzzxxzzzzzzz
+            #-----------------zzx
             if collectData:
+                state = get_state()
+                action_out, gradients = sess.run([myAgent.action_out,myAgent.gradients], feed_dict={myAgent.state_in:[state]})
+                
+                print("Action:",action_out[0][0])
+                print("Gradients:", gradients)
+                
+                
+                #action = m_multinomial9(action[0][0])
+                if do_action:
+                    releaseKeys();
+                    update_pressed_keys(categoriesToKeys(action))
+                    
                 reward = reward + delta_time
-                state = grab_screen(region = capture_region)
-                state = cv2.cvtColor(state, cv2.COLOR_BGR2GRAY)
-                state = cv2.resize(state, (reshape_size[1], reshape_size[0]))
-                state = state.reshape(reshape_size[0], reshape_size[1],1)
-                #-----------------------------
-                history.append([last_state,acc, steer,reward,state]) 
-                last_state = state        
+                current_rewards.append(reward)
+                current_gradients.append(gradients)
+                #g_debug_vars.append(myAgent.gradients)
+                #-----------------------------zzzzzztzztzzzzzztzzztzt
             keys = []
             keys   = key_check()
             
@@ -190,12 +206,13 @@ def main():
                 if collectData == True:
                     collectData = False
                     releaseKeys()
-                    print('On time based reward:',reward)
-                    teach_agent(myAgent, history,sess)                    
-
-                    del history
-                    history = []
-                    #update agent
+                    print('Time:',reward)
+                    all_rewards.append(current_rewards)
+                    all_gradients.append(current_gradients)
+                    del current_rewards
+                    del current_gradients
+                    current_rewards     = []
+                    current_gradients   = []
                 else:
                     collectData = True
                     reward = 0
@@ -207,6 +224,16 @@ def main():
             if 'X' in keys:
                 print ('collecting data stopped')
                 break
+            
+            if 'T' in keys and collectData == False:
+                print ('Teaching agent, please wait')
+                teach_agent(myAgent, all_rewards, all_gradients,sess) 
+                #save_path = saver.save(sess, '/tmp/model{}.ckpt'.format(teach_count))
+                    
+                del all_rewards
+                del all_gradients
+                all_gradients = []
+                all_rewards = []
        
             time1 = time.time()
             delta_time = time1 - time0
