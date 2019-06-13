@@ -6,6 +6,7 @@ from getkeys import key_check
 import os
 import tensorflow as tf
 from tensorflow.contrib import slim
+tf.reset_default_graph()
 class agentZ():
     def __init__(self, lr, s_size,a_size,h_size):
         self.state_in = tf.placeholder(shape=[None]+list(s_size),dtype=tf.float32)
@@ -42,11 +43,34 @@ class agentY():
             grads_and_vars_feed.append((gradient_placeholder, variable))
         self.training_op = optimizer.apply_gradients(grads_and_vars_feed)
         
-tf.reset_default_graph()
-testAgent = agentY(0.1,(300,400,1),9,11)  
+
+#testAgent = agentY(0.1,(300,400,1),9,11)  
+class agentU():
+    def __init__(self,lr,s_size,a_size,h_size):
+        self.state_in = tf.placeholder(shape = [None]+list(s_size),dtype=tf.float32)
+        normalised_img = tf.image.per_image_standardization(self.state_in)
+        conv1 = tf.layers.conv2d(normalised_img,24,5,strides=(4, 4))
+        conv2 = tf.layers.conv2d(conv1, 36, 5, strides = (2,2))
+        conv3 = tf.layers.conv2d(conv2, 48, 5, strides = (2,2))
+        conv4 = tf.layers.conv2d(conv3, 64, 3, strides = (1,1))
+        conv5 = tf.layers.conv2d(conv4, 64, 3, strides = (1,1))
+        flatten       = tf.layers.flatten(conv5,name="flatten")
+        hidden1        = tf.layers.dense(flatten,1164,activation=tf.nn.tanh,name="hidden1")
+        hidden2        = tf.layers.dense(hidden1,100,activation=tf.nn.tanh,name="hidden2")
+        hidden3        = tf.layers.dense(hidden2,50,activation=tf.nn.tanh,name="hidden3")
+        hidden4        = tf.layers.dense(hidden3,10,activation=tf.nn.tanh,name="hidden4")
         
-#tf.reset_default_graph()
-#testAgent = agentZ(0.1,(300,400,1),9,11)  
+        self.action_logits  = tf.layers.dense(hidden4,9, activation=tf.nn.softmax)
+        self.action_in      = tf.placeholder(shape = [None, 9], dtype = tf.float32)
+        self.action_in_sm   = tf.nn.softmax(self.action_in)
+        self.optimizer = tf.train.AdamOptimizer(lr)
+        self.loss = tf.losses.mean_squared_error(self.action_in, self.action_logits)
+        self.minimize = self.optimizer.minimize(self.loss)
+        
+                
+      
+
+testAgent = agentU(0.1,(300,400,1),9,11)  
      
 class lesson2agent():
     def __init__(self, lr, s_size,a_size,h_size):
