@@ -14,9 +14,10 @@ from time import sleep
 from math import sqrt, exp
 capture_region = (0,40,800,640)
 reshape_size = (300,400)
+AGENT_NAME = 'TestAgent'
 g_debug_vars = []
 def keysToCategories(keys):
-    if keys == [0,0,0,0]: #roll
+    if keys == [0,0,0,0]: #rollx
         return [1,0,0,0,0,0,0,0,0]
     if keys == [1,0,0,0]: #roll-right
         return [0,1,0,0,0,0,0,0,0]
@@ -203,13 +204,27 @@ def harvest_input():
     mutex.release()
     return average_categories
 teach_agent_flag = True
+save_flag = False
 def teach_agent():
     tf.reset_default_graph()
+    
+    path_to_agent = AGENT_NAME
     agent = agentU(0.1,(300,400,1),9,11)
-    init = tf.global_variables_initializer()
+    saver = tf.train.Saver()
     with tf.Session() as sess:
-        sleep(1)
-        sess.run(init)
+        try:
+            with open('{}.index'.format(path_to_agent),'r') as fh:
+                print('Agent {} exists. Loading.'.format(AGENT_NAME))
+                saver.restore(sess,path_to_agent)
+                print('Loading complete')
+        except FileNotFoundError:
+            print('Agent {} doesnt exist.Creating.'.format(AGENT_NAME))
+            
+            init = tf.global_variables_initializer()
+            sleep(1)
+            sess.run(init)
+            print('Creation complete')
+        #saver = tf.train.Saver()xx
         while(teach_agent_flag):
             loop_start = time.time()
             state = get_state()
@@ -219,7 +234,7 @@ def teach_agent():
                        agent.action_in:[harvested_input]}
             feed_dict_steer = {agent.state_in:[state]}
             #xxxxxxxxxxxxx
-            #action = sess.run([agent.action_logits], feed_dict=feed_dicxxxt_steer)x
+            #action = sess.run([agent.action_logits], feed_dict=feed_dicxxxt_steer)xxx
             _,loss = sess.run([agent.minimize, agent.loss], feed_dict = feed_dict_learn)
             print("Loss:", loss)
             loop_duration = time.time() - loop_start
@@ -227,6 +242,8 @@ def teach_agent():
             #print("action:",action)
             if(loop_duration < 1.0):
                 sleep(1 - loop_duration)
+                
+        saver.save(sess, path_to_agent)
     
 def control():
     global teach_agent_flag
@@ -265,6 +282,7 @@ def control():
         delta_time = time1 - time0
         
 def main():
+    tf.reset_default_graph()
     gather_input_thread = Thread(target = gather_input)
     control_thread = Thread(target = control)
     gather_input_thread.start()
