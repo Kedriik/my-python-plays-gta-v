@@ -162,18 +162,6 @@ def m_multinomial(acc, steer):
 def m_multinomial9(action):
     return np.random.multinomial(1,action)
 
-gathered_categories = []
-mutex = Lock()
-gather_flag = True
-def gather_input():
-    global gathered_categories
-    key_check()
-    while(gather_flag):
-        keys   = key_check()
-        mutex.acquire(1)
-        gathered_categories.append(keysToCategories(keys_to_output(keys)))
-        mutex.release()
-        sleep(0.1)
 def normalize(v):
     m = 0
     for i in range(len(v)):
@@ -203,11 +191,26 @@ def harvest_input():
     gathered_categories.clear()
     mutex.release()
     return average_categories
+
+gathered_categories = []
+mutex = Lock()
+gather_flag = True
+def gather_input():
+    global gathered_categories
+    key_check()
+    while(gather_flag):
+        keys   = key_check()
+        mutex.acquire(1)
+        gathered_categories.append(keysToCategories(keys_to_output(keys)))
+        mutex.release()
+        sleep(0.1)
 teach_agent_flag = True
 save_flag = False
+pause_learning = True
 def teach_agent():
     tf.reset_default_graph()
-    
+    total_loss=0
+    counter=0
     path_to_agent = AGENT_NAME
     agent = agentU(0.1,(300,400,1),9,11)
     saver = tf.train.Saver()
@@ -218,12 +221,12 @@ def teach_agent():
                 saver.restore(sess,path_to_agent)
                 print('Loading complete')
         except FileNotFoundError:
-            print('Agent {} doesnt exist.Creating.'.format(AGENT_NAME))
+            print('Agent {} doesnt exist.Initializing.'.format(AGENT_NAME))
             
             init = tf.global_variables_initializer()
             sleep(1)
             sess.run(init)
-            print('Creation complete')
+            print('Initialization complete')
         #saver = tf.train.Saver()xx
         while(teach_agent_flag):
             loop_start = time.time()
@@ -232,22 +235,80 @@ def teach_agent():
             #xxx
             feed_dict_learn={agent.state_in:[state],
                        agent.action_in:[harvested_input]}
-            feed_dict_steer = {agent.state_in:[state]}
-            #xxxxxxxxxxxxx
+            #xxxxxxxxxxxxxxx
             #action = sess.run([agent.action_logits], feed_dict=feed_dicxxxt_steer)xxx
+            if pause_learning == True:
+                continue
             _,loss = sess.run([agent.minimize, agent.loss], feed_dict = feed_dict_learn)
-            print("Loss:", loss)
+            total_loss += loss
+            counter+=1
             loop_duration = time.time() - loop_start
-            print("ML loop took:", loop_duration)
+            if counter == 10:
+                print("Loss:", total_loss/10.)
+                total_loss = 0
+                counter = 0
+                print("ML loop took:", loop_duration)
             #print("action:",action)
-            if(loop_duration < 1.0):
+            if(loop_duration < 0.5):
                 sleep(1 - loop_duration)
                 
         saver.save(sess, path_to_agent)
+        
+agent_plays_flag = True
+save_flag = False
+action = np.array([0,0,0,0,0,0,0,0,0])
+def agent_plays():
+    tf.reset_default_graph()
+    path_to_agent = AGENT_NAME
+    agent = agentU(0.1,(300,400,1),9,11)
+    saver = tf.train.Saver()
+    global action
+    with tf.Session() as sess:
+        try:
+            with open('{}.index'.format(path_to_agent),'r') as fh:
+                print('Agent {} exists. Loading.'.format(AGENT_NAME))
+                saver.restore(sess,path_to_agent)
+                print('Loading complete')
+        except FileNotFoundError:
+            print('Agent {} doesnt exist.Initializing.'.format(AGENT_NAME))
+            
+            init = tf.global_variables_initializer()
+            sleep(1)
+            sess.run(init)
+            print('Creation complete')
+#x
+        while(agent_plays_flag):
+            loop_start = time.time()
+            state = get_state()
+            feed_dict_steer = {agent.state_in:[state]}
+            action = np.array(sess.run([agent.action_logits], feed_dict = feed_dict_steer)[0][0])
+            loop_duration = time.time() - loop_start
+            print("ML loop took:", loop_duration)
+            if(loop_duration < 0.5):
+                sleep(1 - loop_duration)
+#x                
+execute_inputs_flag  = True
+def execute_inputs():
+    global action
+    while(execute_inputs_flag):
+        _action = np.around(action,4)
+        _action = np.random.multinomial(1,_action)
+        if pause_learning == True:
+            continue
+        #
+        #print(_action.tolist())x
+        update_pressed_keys(categoriesToKeys(_action.tolist()))
+        sleep(0.01)
+        
+        
+        
     
 def control():
     global teach_agent_flag
-    global gather_flag        
+    global gather_flag
+    global agent_plays_flag
+    global execute_inputs_flag
+    global pause_learning
     collectData = False
     clickFlag = False
     while True:
@@ -258,39 +319,47 @@ def control():
         
         if 'Z' in keys and clickFlag == False:
             clickFlag = True
-            if collectData == True:
-                collectData = False
-            else:
-                collectData = True
+            if pause_learning == True:
+                pause_learning = False
                 print('Training started')
+            else:
+                pause_learning = True
+                print('Training Paused')
         elif 'Z' not in keys and clickFlag == True:
             clickFlag = False
             
                 
         if 'X' in keys:
-            teach_agent_flag = False
-            gather_flag = False
+            teach_agent_flag        = False
+            gather_flag             = False
+            agent_plays_flag        = False
+            execute_inputs_flag     = False
+            releaseKeys()
             print ('collecting data stopped')
             break
         
         if 'T' in keys and collectData == False:
-            print ('Saving agent, please wait')
-            #saver.save(sess, '/tmp/model{}.ckpt'.format(teach_count))
+            print ('Saving agent, please wait') #x
+            #saver.save(sess, '/tmp/model{}.ckpt'.format(teach_count))x
             print('Saved.');
    
         time1 = time.time()
         delta_time = time1 - time0
-        
+play_flag = True
 def main():
     tf.reset_default_graph()
-    gather_input_thread = Thread(target = gather_input)
     control_thread = Thread(target = control)
-    gather_input_thread.start()
-    control_thread.start() 
-    
-    teach_agent()
-        
-    gather_input_thread.join()
+    control_thread.start()
+    if(play_flag == False):
+        gather_input_thread = Thread(target = gather_input)
+        gather_input_thread.start()
+        teach_agent()    
+        gather_input_thread.join()
+    else:
+        execute_input_thread = Thread(target = execute_inputs)
+        execute_input_thread.start()
+        agent_plays()
+        execute_input_thread.join()
     control_thread.join()
         
 if __name__ == '__main__':
